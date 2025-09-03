@@ -1,0 +1,39 @@
+name: CI (Maven)
+
+# Esto es un trigger, se ejecuta cuando hay un push en cualquier rama o cuando se hace un PR. 
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Esto es la lista de acciones que se van a tomar. 
+
+jobs:
+
+#El trabajo definido es para buildear el codigo y correr los tests. 
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+    # Esto llama el codigo del repo a actions para ejecutarlo con maven.
+      - name: Checkout
+        uses: actions/checkout@v4
+  # Aqui se instala el JDK, Se puede cambiar a 17 si lo necesitan, Tambien se habilita el cache de maven para buildear mas rapido a futuro. 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+# Aqui se ejecuta el comando verify sin logs y no interactivo, este comando compila el codigo y ejecuta los tests con surefire, Si los tests fallan, el workflow tambien falla. 
+      - name: Build & test
+        run: mvn -B -ntp verify
+# Esto sube los reportes de los tests a github como un artefacto para poderlos leer, el always hace que se suban incluso cuando el workflow falla, para verificar que paso. 
+      - name: Upload test reports 
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: |
+            **/target/surefire-reports/*.xml
+            **/target/surefire-reports/*.txt
+          retention-days: 7
