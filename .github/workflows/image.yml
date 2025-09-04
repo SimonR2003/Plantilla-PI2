@@ -1,5 +1,7 @@
 name: Build Docker image (exportable)
 
+# trigger
+
 on:
   push:
     branches: ["main"]
@@ -9,33 +11,34 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     env:
+    # Buildear la imagen con el nombre del repo
       IMAGE_NAME: ${{ github.repository }}
     steps:
+    # Traer contenido del repo para el contexto del docker build.
       - name: Checkout
         uses: actions/checkout@v4
-
-      # We grab the project version from pom.xml for tagging.
+  
       - name: Set up JDK (for mvn)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
-
+      #Leer la version del proyecto desde el pom.
       - name: Read project version
         id: ver
         run: echo "VERSION=$(mvn -q -Dexec.executable='echo' -Dexec.args='${project.version}' --non-recursive org.codehaus.mojo:exec-maven-plugin:3.5.0:exec)" >> $GITHUB_OUTPUT
-
+      # Asignar el resto de tags para la imagen.
       - name: Set tags
         id: tags
         run: |
           VERSION="${{ steps.ver.outputs.VERSION }}"
           SHA_TAG="${{ github.sha }}"
           echo "TAGS=${{ env.IMAGE_NAME }}:${VERSION},${{ env.IMAGE_NAME }}:${SHA_TAG}" >> $GITHUB_OUTPUT
-
+    # Habilitar buildx para construir la imagen en el formato necesario.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
+    # Construir la imagen y exportar como TAR
       - name: Build image and export to TAR
         uses: docker/build-push-action@v6
         with:
@@ -44,7 +47,7 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.tags.outputs.TAGS }}
           outputs: type=tar,dest=/tmp/image.tar
-
+    # Subir la imagen como un artefacto para poder acceder a ella y moverla. 
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
@@ -52,14 +55,14 @@ jobs:
           path: /tmp/image.tar
           retention-days: 7
 
-
+    # Abrir GHCR
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
+    # Construir otra vez y pushear a el repositorio para acceder desde el proveedor del hosting.  
       - name: Build & Push to GHCR
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: docker/build-push-action@v6
